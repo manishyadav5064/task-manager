@@ -1,5 +1,6 @@
 package com.example.task_manager.service;
 
+import com.example.task_manager.dto.DashboardDTO;
 import com.example.task_manager.dto.TaskDTO;
 import com.example.task_manager.model.Task;
 import com.example.task_manager.model.enums.TaskPriority;
@@ -33,5 +34,8 @@ public interface TaskService {
 
     // this is required for scheduler
     List<Task> getAllTasksEntities();
+
+    DashboardDTO getDashboardStatistics(Long userId); // optional: for a specific user
+
 
 }

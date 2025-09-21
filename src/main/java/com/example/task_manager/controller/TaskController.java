@@ -1,8 +1,11 @@
 package com.example.task_manager.controller;
 
+import com.example.task_manager.dto.DashboardDTO;
 import com.example.task_manager.dto.TaskDTO;
+import com.example.task_manager.dto.TaskHistoryDTO;
 import com.example.task_manager.model.enums.TaskPriority;
 import com.example.task_manager.model.enums.TaskStatus;
+import com.example.task_manager.service.TaskHistoryService;
 import com.example.task_manager.service.TaskService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,9 +19,11 @@ import java.util.List;
 public class TaskController {
 
     private final TaskService taskService;
+    private final TaskHistoryService taskHistoryService;
 
-    public TaskController(TaskService taskService) {
+    public TaskController(TaskService taskService, TaskHistoryService taskHistoryService) {
         this.taskService = taskService;
+        this.taskHistoryService = taskHistoryService;
     }
 
     // Create a general task (unassigned)
@@ -97,5 +102,14 @@ public class TaskController {
         return taskService.removeLabelFromTask(taskId, labelId);
     }
 
+    @GetMapping("/dashboard")
+    public DashboardDTO getDashboard(@RequestParam(required = false) Long userId) {
+        return taskService.getDashboardStatistics(userId);
+    }
+
+    @GetMapping("/{taskId}/history")
+    public List<TaskHistoryDTO> getTaskHistory(@PathVariable Long taskId) {
+        return taskHistoryService.getTaskHistory(taskId);
+    }
 
 }

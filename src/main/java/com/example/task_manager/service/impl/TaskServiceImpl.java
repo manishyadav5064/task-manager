@@ -1,5 +1,6 @@
 package com.example.task_manager.service.impl;
 
+import com.example.task_manager.dto.DashboardDTO;
 import com.example.task_manager.dto.TaskDTO;
 import com.example.task_manager.exception.ResourceNotFoundException;
 import com.example.task_manager.mapper.TaskMapper;
@@ -11,11 +12,13 @@ import com.example.task_manager.model.enums.TaskStatus;
 import com.example.task_manager.repository.LabelRepository;
 import com.example.task_manager.repository.TaskRepository;
 import com.example.task_manager.repository.UserRepository;
+import com.example.task_manager.service.TaskHistoryService;
 import com.example.task_manager.service.TaskService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,11 +27,13 @@ public class TaskServiceImpl implements TaskService {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final LabelRepository labelRepository;
+    private final TaskHistoryService taskHistoryService;
 
-    public TaskServiceImpl(TaskRepository taskRepository, UserRepository userRepository, LabelRepository labelRepository) {
+    public TaskServiceImpl(TaskRepository taskRepository, UserRepository userRepository, LabelRepository labelRepository, TaskHistoryService taskHistoryService) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.labelRepository = labelRepository;
+        this.taskHistoryService = taskHistoryService;
     }
 
     @Override
@@ -42,6 +47,16 @@ public class TaskServiceImpl implements TaskService {
         }
 
         Task savedTask = taskRepository.save(task);
+
+        // Record creation in history
+        taskHistoryService.recordChange(
+                savedTask.getId(),
+                userId,
+                "TASK_CREATED",
+                null,
+                "Task created with title: " + savedTask.getTitle()
+        );
+
         return TaskMapper.mapToTaskDTO(savedTask);
     }
 
@@ -75,6 +90,33 @@ public class TaskServiceImpl implements TaskService {
         Task existingTask = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
 
+        // Compare old values
+        if (!existingTask.getTitle().equals(taskDTO.getTitle())) {
+            taskHistoryService.recordChange(id, existingTask.getUser() != null ? existingTask.getUser().getId() : null,
+                    "title", existingTask.getTitle(), taskDTO.getTitle());
+        }
+
+        if (!existingTask.getDescription().equals(taskDTO.getDescription())) {
+            taskHistoryService.recordChange(id, existingTask.getUser() != null ? existingTask.getUser().getId() : null,
+                    "description", existingTask.getDescription(), taskDTO.getDescription());
+        }
+
+        if (existingTask.getDueDate() != null && !existingTask.getDueDate().equals(taskDTO.getDueDate())
+                || existingTask.getDueDate() == null && taskDTO.getDueDate() != null) {
+            taskHistoryService.recordChange(id, existingTask.getUser() != null ? existingTask.getUser().getId() : null,
+                    "dueDate",
+                    existingTask.getDueDate() != null ? existingTask.getDueDate().toString() : null,
+                    taskDTO.getDueDate() != null ? taskDTO.getDueDate().toString() : null);
+        }
+
+        if (existingTask.getIsCompleted() != null && !existingTask.getIsCompleted().equals(taskDTO.getIsCompleted())
+                || existingTask.getIsCompleted() == null && taskDTO.getIsCompleted() != null) {
+            taskHistoryService.recordChange(id, existingTask.getUser() != null ? existingTask.getUser().getId() : null,
+                    "isCompleted",
+                    String.valueOf(existingTask.getIsCompleted()),
+                    String.valueOf(taskDTO.getIsCompleted()));
+        }
+
         // Update fields
         existingTask.setTitle(taskDTO.getTitle());
         existingTask.setDescription(taskDTO.getDescription());
@@ -90,6 +132,9 @@ public class TaskServiceImpl implements TaskService {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
 
+        Long oldUserId = task.getUser() != null ? task.getUser().getId() : null;
+        String oldUserName = task.getUser() != null ? task.getUser().getUsername() : null;
+
         if (userId != null) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -99,6 +144,16 @@ public class TaskServiceImpl implements TaskService {
         }
 
         Task savedTask = taskRepository.save(task);
+
+        // Record assignment change
+        taskHistoryService.recordChange(
+                taskId,
+                userId,
+                "assignment",
+                oldUserName,
+                task.getUser() != null ? task.getUser().getUsername() : null
+        );
+
         return TaskMapper.mapToTaskDTO(savedTask);
     }
 
@@ -145,6 +200,13 @@ public class TaskServiceImpl implements TaskService {
 
         task.getLabels().add(label);
         Task saved = taskRepository.save(task);
+
+        taskHistoryService.recordChange(taskId,
+                task.getUser() != null ? task.getUser().getId() : null,
+                "label_added",
+                null,
+                label.getName());
+
         return TaskMapper.mapToTaskDTO(saved);
     }
 
@@ -158,6 +220,13 @@ public class TaskServiceImpl implements TaskService {
 
         task.getLabels().remove(label);
         Task saved = taskRepository.save(task);
+
+        taskHistoryService.recordChange(taskId,
+                task.getUser() != null ? task.getUser().getId() : null,
+                "label_removed",
+                label.getName(),
+                null);
+
         return TaskMapper.mapToTaskDTO(saved);
     }
 
@@ -167,4 +236,56 @@ public class TaskServiceImpl implements TaskService {
         return taskRepository.findAll();
     }
 
+    @Override
+    public DashboardDTO getDashboardStatistics(Long userId) {
+        List<Task> tasks;
+        if (userId != null) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            tasks = user.getTasks();
+        } else {
+            tasks = taskRepository.findAll();
+        }
+
+        Map<TaskStatus, Long> byStatus = tasks.stream()
+                .collect(Collectors.groupingBy(Task::getStatus, Collectors.counting()));
+
+        Map<TaskPriority, Long> byPriority = tasks.stream()
+                .collect(Collectors.groupingBy(Task::getPriority, Collectors.counting()));
+
+        Map<String, Long> byLabel = tasks.stream()
+                .flatMap(t -> t.getLabels().stream())
+                .collect(Collectors.groupingBy(Label::getName, Collectors.counting()));
+
+        Map<String, Long> byUser = tasks.stream()
+                .filter(t -> t.getUser() != null)
+                .collect(Collectors.groupingBy(t -> t.getUser().getUsername(), Collectors.counting()));
+
+        LocalDate today = LocalDate.now();
+        long dueToday = tasks.stream()
+                .filter(t -> t.getDueDate() != null && t.getDueDate().isEqual(today))
+                .count();
+
+        long overdue = tasks.stream()
+                .filter(t -> t.getDueDate() != null && t.getDueDate().isBefore(today) && !t.getIsCompleted())
+                .count();
+
+        List<TaskDTO> upcomingTasks = tasks.stream()
+                .filter(t -> t.getDueDate() != null && t.getDueDate().isAfter(today))
+                .sorted((t1, t2) -> t1.getDueDate().compareTo(t2.getDueDate()))
+                .limit(5)
+                .map(TaskMapper::mapToTaskDTO)
+                .toList();
+
+        return new DashboardDTO(
+                (long) tasks.size(),
+                byStatus,
+                byPriority,
+                byLabel,
+                byUser,
+                dueToday,
+                overdue,
+                upcomingTasks
+        );
+    }
 }
