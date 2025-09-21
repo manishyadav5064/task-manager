@@ -7,19 +7,18 @@ public class TaskMapper {
 
     // Convert Task entity to TaskDTO
     public static TaskDTO mapToTaskDTO(Task task) {
-        Long userId = (task.getUser() != null) ? task.getUser().getId() : null;
-
         return new TaskDTO(
                 task.getId(),
                 task.getTitle(),
                 task.getDescription(),
                 task.getDueDate(),
                 task.getIsCompleted(),
-                userId
+                task.getStatus(),
+                task.getPriority(),
+                task.getUser() != null ? task.getUser().getId() : null
         );
     }
 
-    // Convert TaskDTO to Task entity
     public static Task mapToTask(TaskDTO taskDTO) {
         Task task = new Task();
         task.setId(taskDTO.getId());
@@ -27,10 +26,8 @@ public class TaskMapper {
         task.setDescription(taskDTO.getDescription());
         task.setDueDate(taskDTO.getDueDate());
         task.setIsCompleted(taskDTO.getIsCompleted());
-
-        // User will be set separately in service/controller
-        task.setUser(null);
-
+        task.setStatus(taskDTO.getStatus());
+        task.setPriority(taskDTO.getPriority());
         return task;
     }
 }

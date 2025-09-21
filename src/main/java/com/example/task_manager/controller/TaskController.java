@@ -1,10 +1,14 @@
 package com.example.task_manager.controller;
 
 import com.example.task_manager.dto.TaskDTO;
+import com.example.task_manager.model.enums.TaskPriority;
+import com.example.task_manager.model.enums.TaskStatus;
 import com.example.task_manager.service.TaskService;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -64,4 +68,34 @@ public class TaskController {
     public void deleteTask(@PathVariable Long id) {
         taskService.deleteTask(id);
     }
+
+    @GetMapping("/filter")
+    public List<TaskDTO> filterTasks(
+            @RequestParam(required = false) TaskStatus status,
+            @RequestParam(required = false) TaskPriority priority
+    ) {
+        return taskService.filterTasks(status, priority);
+    }
+
+    @GetMapping("/search")
+    public List<TaskDTO> searchTasks(
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate
+    ) {
+        return taskService.searchTasks(title, description, userId, dueDate);
+    }
+
+    @PutMapping("/{taskId}/labels/{labelId}")
+    public TaskDTO addLabel(@PathVariable Long taskId, @PathVariable Long labelId) {
+        return taskService.addLabelToTask(taskId, labelId);
+    }
+
+    @DeleteMapping("/{taskId}/labels/{labelId}")
+    public TaskDTO removeLabel(@PathVariable Long taskId, @PathVariable Long labelId) {
+        return taskService.removeLabelFromTask(taskId, labelId);
+    }
+
+
 }
