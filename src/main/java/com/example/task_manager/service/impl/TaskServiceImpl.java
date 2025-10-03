@@ -12,8 +12,10 @@ import com.example.task_manager.model.enums.TaskStatus;
 import com.example.task_manager.repository.LabelRepository;
 import com.example.task_manager.repository.TaskRepository;
 import com.example.task_manager.repository.UserRepository;
+import com.example.task_manager.security.utils.SecurityUtils;
 import com.example.task_manager.service.TaskHistoryService;
 import com.example.task_manager.service.TaskService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -22,22 +24,26 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final LabelRepository labelRepository;
     private final TaskHistoryService taskHistoryService;
-
-    public TaskServiceImpl(TaskRepository taskRepository, UserRepository userRepository, LabelRepository labelRepository, TaskHistoryService taskHistoryService) {
-        this.taskRepository = taskRepository;
-        this.userRepository = userRepository;
-        this.labelRepository = labelRepository;
-        this.taskHistoryService = taskHistoryService;
-    }
+    private final SecurityUtils securityUtils;
 
     @Override
     public TaskDTO createTask(TaskDTO taskDTO, Long userId) {
+        User currentUser = securityUtils.getCurrentUserEntity();
+
+        if (!securityUtils.isAdmin(currentUser)) {
+            // Normal user can only create tasks for themselves
+            if (userId == null || !userId.equals(currentUser.getId())) {
+                throw new SecurityException("You can only create tasks for yourself");
+            }
+        }
+
         Task task = TaskMapper.mapToTask(taskDTO);
 
         if (userId != null) {
@@ -87,8 +93,14 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public TaskDTO updateTask(Long id, TaskDTO taskDTO) {
+        User currentUser = securityUtils.getCurrentUserEntity();
+
         Task existingTask = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        if (!securityUtils.isOwner(existingTask.getUser(), currentUser) && !securityUtils.isAdmin(currentUser)) {
+            throw new SecurityException("You can only update your own tasks");
+        }
 
         // Compare old values
         if (!existingTask.getTitle().equals(taskDTO.getTitle())) {
@@ -129,20 +141,23 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public TaskDTO assignTaskToUser(Long taskId, Long userId) {
+        User currentUser = securityUtils.getCurrentUserEntity();
+
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
 
         Long oldUserId = task.getUser() != null ? task.getUser().getId() : null;
         String oldUserName = task.getUser() != null ? task.getUser().getUsername() : null;
 
-        if (userId != null) {
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-            task.setUser(user);
-        } else {
-            task.setUser(null);
+        if (!securityUtils.isOwner(task.getUser(), currentUser) && !securityUtils.isAdmin(currentUser)) {
+            throw new SecurityException("You can only reassign your own tasks");
         }
 
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+
+        task.setUser(user);
         Task savedTask = taskRepository.save(task);
 
         // Record assignment change
@@ -159,10 +174,16 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public void deleteTask(Long id) {
-        if (!taskRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Task not found");
+        User currentUser = securityUtils.getCurrentUserEntity();
+
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        if (!securityUtils.isOwner(task.getUser(), currentUser) && !securityUtils.isAdmin(currentUser)) {
+            throw new SecurityException("You can only delete your own tasks");
         }
-        taskRepository.deleteById(id);
+
+        taskRepository.delete(task);
     }
 
     @Override

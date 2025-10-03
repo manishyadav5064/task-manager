@@ -31,10 +31,10 @@ public class TaskHistory {
     @Column(nullable = false)
     private String fieldChanged;
 
-    @Column(nullable = false)
+    @Column
     private String oldValue;
 
-    @Column(nullable = false)
+    @Column
     private String newValue;
 
     private LocalDateTime changedAt = LocalDateTime.now();

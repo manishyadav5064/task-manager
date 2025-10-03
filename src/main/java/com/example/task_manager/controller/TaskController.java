@@ -26,15 +26,9 @@ public class TaskController {
         this.taskHistoryService = taskHistoryService;
     }
 
-    // Create a general task (unassigned)
     @PostMapping("/create")
-    public TaskDTO createTask(@Valid @RequestBody TaskDTO taskDTO) {
-        return taskService.createTask(taskDTO, null);
-    }
-
-    // Create task for a specific user
-    @PostMapping
-    public TaskDTO createTaskForUser(@Valid @RequestBody TaskDTO taskDTO, @RequestParam Long userId) {
+    public TaskDTO createTask(@Valid @RequestBody TaskDTO taskDTO,
+                              @RequestParam(required = false) Long userId) {
         return taskService.createTask(taskDTO, userId);
     }
 

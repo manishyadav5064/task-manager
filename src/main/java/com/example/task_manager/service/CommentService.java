@@ -8,4 +8,6 @@ public interface CommentService {
     CommentDTO addComment(CommentDTO commentDTO);
 
     List<CommentDTO> getCommentsByTask(Long taskId);
+
+    void deleteComment(Long commentId);
 }

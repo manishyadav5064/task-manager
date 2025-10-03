@@ -9,6 +9,7 @@ import com.example.task_manager.model.User;
 import com.example.task_manager.repository.CommentRepository;
 import com.example.task_manager.repository.TaskRepository;
 import com.example.task_manager.repository.UserRepository;
+import com.example.task_manager.security.utils.SecurityUtils;
 import com.example.task_manager.service.CommentService;
 import org.springframework.stereotype.Service;
 
@@ -21,11 +22,13 @@ public class CommentServiceImpl implements CommentService {
     private final CommentRepository commentRepository;
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
+    private final SecurityUtils securityUtils;
 
-    public CommentServiceImpl(CommentRepository commentRepository, TaskRepository taskRepository, UserRepository userRepository) {
+    public CommentServiceImpl(CommentRepository commentRepository, TaskRepository taskRepository, UserRepository userRepository, SecurityUtils securityUtils) {
         this.commentRepository = commentRepository;
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
+        this.securityUtils = securityUtils;
     }
 
     @Override
@@ -51,5 +54,19 @@ public class CommentServiceImpl implements CommentService {
         return commentRepository.findByTaskId(taskId).stream()
                 .map(CommentMapper::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteComment(Long commentId) {
+        User currentUser = securityUtils.getCurrentUserEntity();
+
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
+
+        if (!securityUtils.isOwner(comment.getUser(), currentUser) && !securityUtils.isAdmin(currentUser)) {
+            throw new SecurityException("You can only delete your own comments");
+        }
+
+        commentRepository.delete(comment);
     }
 }
