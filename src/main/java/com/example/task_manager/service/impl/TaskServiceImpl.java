@@ -34,20 +34,21 @@ public class TaskServiceImpl implements TaskService {
     private final SecurityUtils securityUtils;
 
     @Override
-    public TaskDTO createTask(TaskDTO taskDTO, Long userId) {
+    public TaskDTO createTask(TaskDTO taskDTO) {
         User currentUser = securityUtils.getCurrentUserEntity();
+        Long userIdInRequest = taskDTO.getUserId();
 
         if (!securityUtils.isAdmin(currentUser)) {
             // Normal user can only create tasks for themselves
-            if (userId == null || !userId.equals(currentUser.getId())) {
-                throw new SecurityException("You can only create tasks for yourself");
+            if (userIdInRequest == null || !userIdInRequest.equals(currentUser.getId())) {
+                throw new SecurityException("You can only create tasks for yourself, Please pass your own userId in request body");
             }
         }
 
         Task task = TaskMapper.mapToTask(taskDTO);
 
-        if (userId != null) {
-            User user = userRepository.findById(userId)
+        if (userIdInRequest != null) {
+            User user = userRepository.findById(userIdInRequest)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
             task.setUser(user);
         }
@@ -57,7 +58,7 @@ public class TaskServiceImpl implements TaskService {
         // Record creation in history
         taskHistoryService.recordChange(
                 savedTask.getId(),
-                userId,
+                userIdInRequest,
                 "TASK_CREATED",
                 null,
                 "Task created with title: " + savedTask.getTitle()

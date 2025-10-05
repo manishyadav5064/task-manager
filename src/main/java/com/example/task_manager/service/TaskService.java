@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface TaskService {
-    TaskDTO createTask(TaskDTO task, Long userId);
+    TaskDTO createTask(TaskDTO task);
 
     List<TaskDTO> getAllTasks();
 

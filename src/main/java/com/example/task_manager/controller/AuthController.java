@@ -8,49 +8,51 @@ import com.example.task_manager.model.User;
 import com.example.task_manager.repository.UserRepository;
 import com.example.task_manager.security.jwt.JwtUtils;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
 
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtils jwtUtils) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtUtils = jwtUtils;
-    }
-
     @PostMapping("/signup")
     public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest req) {
         if (userRepository.findByUsername(req.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().body("Username exists");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Username already exists");
         }
         if (userRepository.findByEmail(req.getEmail()).isPresent()) {
-            return ResponseEntity.badRequest().body("Email exists");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Email already exists");
         }
-        User u = new User();
-        u.setUsername(req.getUsername());
-        u.setEmail(req.getEmail());
-        u.setPassword(passwordEncoder.encode(req.getPassword()));
-        u.setRole(Role.USER);
-        userRepository.save(u);
-        return ResponseEntity.ok("User registered");
+
+        User user = new User();
+        user.setUsername(req.getUsername());
+        user.setEmail(req.getEmail());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setRole(Role.USER);
+
+        userRepository.save(user);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body("User registered successfully");
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody AuthRequest req) {
-        User u = userRepository.findByUsername(req.getUsername())
+        User user = userRepository.findByUsername(req.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        if (!passwordEncoder.matches(req.getPassword(), u.getPassword())) {
+
+        if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid credentials");
         }
-        String token = jwtUtils.generateToken(u.getUsername(), u.getRole().name());
+
+        String token = jwtUtils.generateToken(user.getUsername(), user.getRole().name());
         return ResponseEntity.ok(new AuthResponse(token));
     }
 }
